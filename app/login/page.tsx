@@ -113,12 +113,12 @@ function LoginForm() {
         {/* Logo和标题 */}
         <div className="text-center mb-8">
           <img 
-            src="/wuhr-ai.svg"
-            alt="Wuhr AI Logo"
+            src="/ruiyun.ico"
+            alt="RAYVISION Logo"
             className="w-16 h-16 mx-auto mb-4"
           />
           <Title level={2} className="!mb-2">
-            Wuhr AI Ops
+            RAYVISION
           </Title>
           <Text type="secondary">
             运维工程师的AI助手平台

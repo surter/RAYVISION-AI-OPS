@@ -58,8 +58,8 @@ export const FullScreenLoading: React.FC<{ text?: string }> = ({ text = '系统�
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center shadow-lg overflow-hidden">
             <img
-              src="/wuhr-ai.svg"
-              alt="Wuhr AI Ops Logo"
+              src="/ruiyun.ico"
+              alt="RAYVISION Logo"
               className="w-10 h-10 object-contain"
               onError={(e) => {
                 // 如果图片加载失败，显示默认图标

@@ -64,8 +64,8 @@ export default function RootLayout({
         <meta name="theme-color" content="#1f2937" />
         
         {/* Favicon */}
-        <link rel="icon" href="/wuhr-ai.svg" />
-        <link rel="apple-touch-icon" href="/wuhr-ai.svg" />
+        <link rel="icon" href="/ruiyun.ico" />
+        <link rel="apple-touch-icon" href="/ruiyun.ico" />
         
         {/* 性能优化预加载 */}
         <link rel="preconnect" href="https://ai.wuhrai.com" />

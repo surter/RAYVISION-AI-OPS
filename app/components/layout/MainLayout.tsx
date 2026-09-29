@@ -610,12 +610,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           isDark ? 'border-gray-700/30' : 'border-gray-200/50'
         }`}>
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-500 rounded-lg flex items-center justify-center">
-              <RobotOutlined className="text-white text-lg" />
+            <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-white">
+              <img src="/ruiyun.ico" alt="RAYVISION Logo" className="w-full h-full" />
             </div>
             {!collapsed && (
               <div>
-                <h1 className="text-lg font-bold gradient-text">Wuhr AI</h1>
+                <h1 className="text-lg font-bold gradient-text">RAYVISION</h1>
                 <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                   Ops Platform
                 </p>
