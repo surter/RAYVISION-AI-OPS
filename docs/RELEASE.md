@@ -1,4 +1,4 @@
-# Wuhr AI Ops 发布制作手册
+# RAYVISION AI Ops 发布制作手册
 
 本文面向拥有前端与 Agent 源码的发布负责人。客户安装手册见 [`INSTALLATION.md`](./INSTALLATION.md)。
 
@@ -22,7 +22,9 @@
 
 ## 正式构建
 
-公开 GitHub Release 只上传后端 Agent 文件；前端镜像独立发布到 Docker Hub。在前端仓库根目录构建 Agent 发布包：
+公开 GitHub Release 只上传后端 Agent 文件；前端镜像独立发布到 Docker Hub。当前仓库根目录有两个发布脚本：`build-agent-release.sh` 只构建 Agent 发布包，`build-release.sh` 同时构建包含平台镜像归档的完整离线包。
+
+### Agent 发布包
 
 ```bash
 ./packaging/build-agent-release.sh --version 1.0.1
@@ -69,6 +71,14 @@ wuhrai/wuhrai:git-SHORT_COMMIT
 ## 平台离线包
 
 `packaging/build-release.sh` 仍可供内部或私有交付构建完整平台离线包，但该产物不得上传到公开 GitHub Release 或国内 `/download/` 目录。
+
+在前端仓库根目录构建完整离线包：
+
+```bash
+./packaging/build-release.sh --version 1.0.1 --backend-dir ../v1/backend
+```
+
+输出文件为 `dist/wuhr-ai-ops-1.0.1.tar.gz`。解压后，包内包含 `install.sh`、`install-platform.sh`、`install-agent.sh`、`doctor.sh`、`docker-compose.yml`、四种 Agent 二进制和按架构导出的平台/PostgreSQL/Redis 镜像归档。该包适用于无外网环境，不应与只包含 Agent 的 GitHub Release 包混用。
 
 离线包中的 Node、PostgreSQL 和 Redis 构建依赖默认通过 `m.daocloud.io/docker.io/library/*` 获取并保留 DaoCloud 镜像名称，确保发布包 Compose 与镜像归档一致；正式打包前必须分别验收 `linux/amd64` 和 `linux/arm64`。
 

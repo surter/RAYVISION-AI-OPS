@@ -1,6 +1,6 @@
-# Wuhr AI Ops 安装与升级手册
+# RAYVISION AI Ops 安装与升级手册
 
-本文面向平台与 Agent 系统管理员。平台运行镜像发布在 [Docker Hub `wuhrai/wuhrai`](https://hub.docker.com/r/wuhrai/wuhrai)；Node、PostgreSQL 和 Redis 默认通过 [DaoCloud 公共镜像加速](https://github.com/DaoCloud/public-image-mirror) 获取；公开 GitHub Release 只包含 Wuhr Agent 编译后二进制、安装脚本和校验文件，不包含后端源码。
+本文面向平台与 Agent 系统管理员。平台运行镜像仍发布在 [Docker Hub `wuhrai/wuhrai`](https://hub.docker.com/r/wuhrai/wuhrai)；Node、PostgreSQL 和 Redis 默认通过 [DaoCloud 公共镜像加速](https://github.com/DaoCloud/public-image-mirror) 获取；公开 GitHub Release 只包含 Agent 编译后二进制、安装脚本和校验文件，不包含后端源码。`wuhrai/wuhrai`、`kubelet-wuhrai` 和相关环境变量是当前部署兼容标识，不随界面品牌名修改。
 
 ## 1. 部署结构
 
@@ -27,6 +27,46 @@ Agent 支持：
 - macOS：Intel、Apple Silicon；launchd
 
 建议配置为 4 核 CPU、8 GiB 内存和 20 GiB 可用磁盘。首次安装若 Docker 缺失，脚本会尝试通过系统软件源安装；完全离线环境应提前安装 Docker Engine 与 Compose v2。
+
+## 本地源码运行
+
+适用于 Windows、macOS 或 Linux 上的二次开发。该方式只启动本地 Next.js 开发服务，PostgreSQL 和 Redis 仍通过 Docker Desktop 或 Docker Engine 提供；生产部署请使用后面的 `install.sh` 流程。
+
+### 准备依赖
+
+需要 Node.js 20 或更高版本、npm、Docker Desktop/Docker Engine 和 Docker Compose v2。Windows PowerShell 示例：
+
+```powershell
+git clone https://github.com/surter/RAYVISION-AI-OPS.git
+cd RAYVISION-AI-OPS
+npm ci
+npx prisma generate
+docker compose --env-file .env.docker up -d postgres redis
+```
+
+`.env.docker` 中的数据库主机名 `postgres` 和 Redis 主机名 `redis` 只适用于容器内部。Next.js 在宿主机运行时，连接地址必须使用 `localhost`。启动开发服务前设置以下变量：
+
+```powershell
+$env:NODE_ENV = "development"
+$env:DATABASE_URL = "postgresql://wuhr_admin:wuhr_secure_password_2024@localhost:5432/wuhr_ai_ops?sslmode=disable"
+$env:DIRECT_URL = $env:DATABASE_URL
+$env:JWT_SECRET = "change-this-development-jwt-secret"
+$env:ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+$env:REDIS_HOST = "localhost"
+$env:REDIS_PORT = "6379"
+$env:REDIS_PASSWORD = "redis_password_2024"
+```
+
+首次启动本地数据库时执行迁移和种子数据初始化。`DEFAULT_ADMIN_PASSWORD` 必须显式提供，且至少 12 个字符：
+
+```powershell
+$env:DEFAULT_ADMIN_PASSWORD = "change-this-local-admin-password"
+npm run db:migrate:deploy
+npm run db:seed
+npm run dev
+```
+
+开发服务默认访问地址为 `http://localhost:3000`。默认管理员用户名和邮箱分别为 `admin`、`admin@wuhr.ai`；生产环境不要使用文档中的示例密码，应该通过 `--admin-password-file` 提供专用密码。
 
 ## 3. 交互式一键部署整个平台
 
@@ -78,7 +118,7 @@ macOS 需要先启动 Docker Desktop，并使用 `./install.sh`（不要在整�
 .deploy/wuhr-ai-ops/initial-credentials.txt
 ```
 
-默认登录邮箱为 `admin@wuhr.ai`，用户名为 `admin`，固定初始密码为 `WuhrAI@2026!`。文件权限为 `600`。首次登录修改密码并安全保存 Agent Key 后，应删除初始凭据文件。需要为正式环境指定不同密码时，可使用 `--admin-password-file`。
+默认登录邮箱为 `admin@wuhr.ai`，用户名为 `admin`。未指定 `--admin-password-file` 时，安装脚本会使用兼容旧版本的固定初始密码 `WuhrAI@2026!`；生产环境必须通过 `--admin-password-file` 指定专用密码。文件权限为 `600`。首次登录修改密码并安全保存 Agent Key 后，应删除初始凭据文件。
 
 如果存量环境忘记密码或旧凭据已失效，可在不删除 PostgreSQL、Redis 和业务数据的情况下重置管理员密码：
 
@@ -86,7 +126,7 @@ macOS 需要先启动 Docker Desktop，并使用 `./install.sh`（不要在整�
 ./install.sh platform --reset-admin-password --non-interactive
 ```
 
-脚本会复用现有部署状态，把密码恢复为 `WuhrAI@2026!`、同步管理员启用/审批/权限字段，分别在容器重建前后真实登录验证，最后覆盖初始凭据文件并在终端显示完整登录信息。也可以配合 `--admin-password-file` 指定客户预先准备的密码文件。
+脚本会复用现有部署状态，使用固定兼容密码 `WuhrAI@2026!` 或 `--admin-password-file` 指定的密码，同步管理员启用/审批/权限字段，分别在容器重建前后真实登录验证，最后覆盖初始凭据文件并在终端显示完整登录信息。
 
 ### 镜像与国内加速
 
@@ -198,11 +238,13 @@ macOS 使用 `shasum -a 256 -c 文件名.sha256`。不要安装校验失败的�
 
 ## 5. 私有离线包一键安装
 
-本节仅适用于发布负责人生成的私有完整离线包。普通联网服务器应使用上一节的根目录 `install.sh` 和 Docker Hub 多架构镜像；完全离线环境才需要包含镜像归档的私有包。
+本节仅适用于 `packaging/build-release.sh` 生成的完整离线包。普通联网服务器应使用上一节的根目录 `install.sh` 和 Docker Hub 多架构镜像；完全离线环境才需要使用包含镜像归档的私有包。
 
 适合单机试用或平台与中央 Agent 部署在同一台 Linux 服务器：
 
 ```bash
+tar -xzf dist/wuhr-ai-ops-VERSION.tar.gz
+cd wuhr-ai-ops-VERSION
 sudo ./install.sh all
 ```
 
@@ -222,7 +264,7 @@ sudo ./install.sh all
 /opt/wuhr-ai-ops/initial-credentials.txt
 ```
 
-默认用户名为 `admin`，邮箱为 `admin@wuhr.ai`，固定初始密码为 `WuhrAI@2026!`。该文件权限为 `600`。首次登录并安全保存凭据后，请立即修改管理员密码并删除此文件。
+默认用户名为 `admin`，邮箱为 `admin@wuhr.ai`。未指定 `--admin-password-file` 时兼容旧版本的初始密码为 `WuhrAI@2026!`；正式环境应通过 `--admin-password-file` 提供专用密码。该文件权限为 `600`。首次登录并安全保存凭据后，请立即修改管理员密码并删除此文件。
 
 ## 6. 私有离线包分开安装
 
