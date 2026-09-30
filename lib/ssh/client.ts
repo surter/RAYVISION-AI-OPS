@@ -100,6 +100,11 @@ export class SSHClient {
     }
   }
 
+  // 通过 SFTP 上传本地发布文件，供离线或受限网络环境安装 Agent。
+  async uploadFile(localPath: string, remotePath: string): Promise<void> {
+    await this.ssh.putFile(localPath, remotePath)
+  }
+
   // 检查命令是否存在
   async commandExists(command: string): Promise<boolean> {
     try {

@@ -68,6 +68,26 @@ npm run dev
 
 开发服务默认访问地址为 `http://localhost:3000`。默认管理员用户名和邮箱分别为 `admin`、`admin@wuhr.ai`；生产环境不要使用文档中的示例密码，应该通过 `--admin-password-file` 提供专用密码。
 
+### 使用本地 Agent 发布包
+
+如果远程主机无法访问 GitHub 或国内镜像，可以让平台通过 SSH 上传本地 Agent 发布包后安装。发布包目录必须包含以下结构，并且要匹配远程主机的操作系统和 CPU 架构：
+
+```text
+agent-package/
+├── install-agent.sh
+└── agent/bin/
+  └── kubelet-wuhrai-linux-amd64
+```
+
+在运行 Next.js 的本地进程中设置 `WUHR_AGENT_PACKAGE_DIR`：
+
+```powershell
+$env:WUHR_AGENT_PACKAGE_DIR = "C:\path\to\agent-package"
+npm run dev
+```
+
+点击“自动安装并同步 Agent”时，平台会先读取远程主机的 OS/架构，通过 SFTP 上传对应的安装脚本和二进制，再同步通信密钥并执行安装。未设置该变量、目录不存在或缺少安装脚本时，会自动回退到 GitHub 与国内镜像下载流程。临时上传目录和通信密钥会在安装结束后删除。
+
 ## 3. 交互式一键部署整个平台
 
 公开仓库提供前端源码，后端 Agent 使用编译包。推荐在 Linux 服务器执行：

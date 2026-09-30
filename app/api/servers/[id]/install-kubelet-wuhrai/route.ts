@@ -11,6 +11,8 @@ import {
   normalizeAgentVersion
 } from '../../../../../lib/agentRelease'
 import { randomUUID } from 'node:crypto'
+import { access } from 'node:fs/promises'
+import path from 'node:path'
 
 function resolvePlatformAgentApiKey(): string {
   const apiKey = process.env.IMPROVE_API_KEY?.trim() || ''
@@ -34,6 +36,60 @@ function buildAuthenticatedHealthCheck(port: number, apiKeyFile: string): string
 
 function buildAgentVersionCheck(port: number): string {
   return `curl --noproxy '*' -fsS 'http://127.0.0.1:${port}/api/version' 2>/dev/null || true`
+}
+
+async function getLocalAgentPackageDir(): Promise<string> {
+  const packageDir = process.env.WUHR_AGENT_PACKAGE_DIR?.trim() || ''
+  if (!packageDir) return ''
+
+  try {
+    await access(path.join(packageDir, 'install-agent.sh'))
+    return packageDir
+  } catch {
+    return ''
+}
+
+function getAgentTarget(system: string, architecture: string): string {
+  const os = system.trim().toLowerCase() === 'darwin' ? 'darwin' : system.trim().toLowerCase() === 'linux' ? 'linux' : ''
+  const arch = ['x86_64', 'amd64'].includes(architecture.trim().toLowerCase())
+    ? 'amd64'
+    : ['aarch64', 'arm64'].includes(architecture.trim().toLowerCase())
+      ? 'arm64'
+      : ''
+  if (!os || !arch) throw new Error(`不支持的远程 Agent 平台：${system}/${architecture}`)
+  return `${os}-${arch}`
+}
+
+async function uploadLocalAgentPackage(
+  sshClient: InstanceType<typeof import('../../../../../lib/ssh/client').SSHClient>,
+  packageDir: string,
+  remoteDir: string,
+  port: number,
+  apiKeyFile: string
+): Promise<string> {
+  const systemInfo = await sshClient.getSystemInfo()
+  const target = getAgentTarget(systemInfo.os, systemInfo.arch)
+  const installerPath = path.resolve(packageDir, 'install-agent.sh')
+  const binaryPath = path.resolve(packageDir, 'agent', 'bin', `kubelet-wuhrai-${target}`)
+
+  await Promise.all([access(installerPath), access(binaryPath)])
+
+  const remoteInstallerPath = `${remoteDir}/install-agent.sh`
+  const remoteBinaryPath = `${remoteDir}/agent/bin/kubelet-wuhrai-${target}`
+  const prepareResult = await sshClient.executeCommand(
+    `umask 077 && mkdir -p '${remoteDir}/agent/bin'`
+  )
+  if (!prepareResult.success) {
+    throw new Error(`准备本地 Agent 上传目录失败: ${prepareResult.stderr || '远程目录创建失败'}`)
+  }
+
+  await sshClient.uploadFile(installerPath, remoteInstallerPath)
+  await sshClient.uploadFile(binaryPath, remoteBinaryPath)
+
+  return [
+    `chmod 700 '${remoteDir}' && chmod 755 '${remoteInstallerPath}' '${remoteBinaryPath}'`,
+    `sh '${remoteInstallerPath}' --port ${port} --api-key-file '${apiKeyFile}'`
+  ].join(' && ')
 }
 
 function parseAgentVersion(output: string): string {
@@ -140,6 +196,7 @@ export async function POST(
     let installSuccess = false
     let errorMessage = ''
     const remoteApiKeyFile = `/tmp/.wuhr-agent-api-key-${randomUUID()}`
+    const remoteInstallDir = `/tmp/.wuhr-agent-install-${randomUUID()}`
 
     try {
       // 连接到服务器
@@ -213,12 +270,18 @@ export async function POST(
 
       // 如果未安装或启动失败，执行安装脚本
       if (!installSuccess) {
-        installLogs.push('📥 开始下载并执行安装脚本...')
+        const localPackageDir = await getLocalAgentPackageDir()
+        if (localPackageDir) {
+          installLogs.push(`📦 使用本地 Agent 发布包：${localPackageDir}`)
+        } else {
+          installLogs.push('📥 开始下载并执行安装脚本...')
+        }
 
-        // 构建安装命令
-        const installCommand = `${buildAgentInstallCommand(kubeletPort, { apiKeyFile: remoteApiKeyFile })} 2>&1`
+        const installCommand = localPackageDir
+          ? `${await uploadLocalAgentPackage(sshClient, localPackageDir, remoteInstallDir, kubeletPort, remoteApiKeyFile)} 2>&1`
+          : `${buildAgentInstallCommand(kubeletPort, { apiKeyFile: remoteApiKeyFile })} 2>&1`
 
-        installLogs.push(`执行: ${installCommand}`)
+        installLogs.push(localPackageDir ? '📤 本地 Agent 包已上传，开始执行安装' : '🌐 开始执行远程安装器')
 
         // 执行安装脚本（安装脚本内部有超时处理）
         const installResult = await sshClient.executeCommand(installCommand)
@@ -270,7 +333,7 @@ export async function POST(
     } finally {
       // 无论安装成功与否都删除远程临时密钥文件。
       try {
-        await sshClient.executeCommand(`rm -f '${remoteApiKeyFile}'`)
+        await sshClient.executeCommand(`rm -f '${remoteApiKeyFile}'; rm -rf '${remoteInstallDir}'`)
       } catch {
         // SSH 连接可能已经中断，临时目录会由系统后续清理。
       }
